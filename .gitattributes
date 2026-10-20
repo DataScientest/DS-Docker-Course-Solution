@@ -1,3 +1,3 @@
-# Unix line endings (LF) for all text files, whatever the operating system:
-# Linux containers read some of the repository's files as they are (CSV, SQL).
+# Fins de ligne Unix (LF) pour tous les fichiers texte, quel que soit le système :
+# les conteneurs Linux lisent tels quels certains fichiers du dépôt (CSV, SQL).
 * text=auto eol=lf

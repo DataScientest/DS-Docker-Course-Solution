@@ -1,50 +1,52 @@
 """
-Training of the fraud detection model: the program of the train service.
+Entraînement du modèle de détection de fraude : le programme du service train.
 
-You do not need to modify this file: your job is to run it in a container.
+Vous n'avez pas besoin de modifier ce fichier : votre travail consiste à le
+faire tourner dans un conteneur.
 
-What the script does
---------------------
-1. It reads from the MariaDB database the amount, the hour and the is_fraud
-   label (fraud or not) of each transaction.
-2. It trains a k-nearest neighbors model (KNN, with k = 5): to assess a new
-   transaction, the model looks for the 5 known transactions whose amount and
-   hour are the most similar, and checks how many of them were frauds.
-3. It saves the model to the file given by MODEL_PATH, then stops: it is a
-   one-off job, not a server.
+Ce que fait le script
+---------------------
+1. Il lit dans la base MariaDB le montant, l'heure et l'étiquette is_fraud
+   (fraude ou non) de chaque transaction.
+2. Il entraîne un modèle des k plus proches voisins (KNN, avec k = 5) : pour
+   juger une nouvelle transaction, le modèle cherche les 5 transactions connues
+   dont le montant et l'heure lui ressemblent le plus, et regarde combien
+   d'entre elles étaient des fraudes.
+3. Il enregistre le modèle dans le fichier indiqué par MODEL_PATH, puis il
+   s'arrête : c'est un traitement ponctuel, pas un serveur.
 
-Running the script
-------------------
+Lancer le script
+----------------
     python train.py
 
-Configuration (environment variables)
--------------------------------------
+Configuration (variables d'environnement)
+-----------------------------------------
     DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
-                 the connection to MariaDB, exactly as for the API
-    MODEL_PATH   path of the file where the model is saved, for example
-                 /models/knn.joblib (the folder is created if it does not exist)
+                 la connexion à MariaDB, exactement comme pour l'API
+    MODEL_PATH   chemin du fichier où enregistrer le modèle, par exemple
+                 /models/knn.joblib (le dossier est créé s'il n'existe pas)
 
-If a variable is missing or the database cannot be reached, the script stops
-with an error message and an exit code other than 0.
+Si une variable manque ou si la base est injoignable, le script s'arrête avec
+un message d'erreur et un code de sortie différent de 0.
 """
 
 import os
 import sys
 from pathlib import Path
 
-import joblib  # installed with scikit-learn
+import joblib  # installé avec scikit-learn
 import pymysql
 import sklearn
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-N_NEIGHBORS = 5
+NB_VOISINS = 5
 
 
-def read_transactions():
-    """Returns, for each transaction, the triplet (amount, hour, fraud)."""
-    connection = pymysql.connect(
+def lire_transactions():
+    """Renvoie, pour chaque transaction, le triplet (montant, heure, fraude)."""
+    connexion = pymysql.connect(
         host=os.environ["DB_HOST"],
         port=int(os.getenv("DB_PORT", "3306")),
         user=os.getenv("DB_USER", ""),
@@ -53,44 +55,44 @@ def read_transactions():
         connect_timeout=5,
     )
     try:
-        with connection.cursor() as cursor:
-            cursor.execute(
+        with connexion.cursor() as curseur:
+            curseur.execute(
                 "SELECT amount, HOUR(transaction_date), is_fraud FROM transactions ORDER BY transaction_id"
             )
-            return cursor.fetchall()
+            return curseur.fetchall()
     finally:
-        connection.close()
+        connexion.close()
 
 
 def main():
-    model_path = os.getenv("MODEL_PATH")
-    if not model_path:
-        sys.exit("Error: the MODEL_PATH environment variable is not set.")
+    chemin_modele = os.getenv("MODEL_PATH")
+    if not chemin_modele:
+        sys.exit("Erreur : la variable d'environnement MODEL_PATH n'est pas définie.")
     if not os.getenv("DB_HOST"):
-        sys.exit("Error: the DB_HOST environment variable is not set.")
+        sys.exit("Erreur : la variable d'environnement DB_HOST n'est pas définie.")
 
     try:
-        transactions = read_transactions()
-    except pymysql.MySQLError as error:
-        sys.exit(f"Error: cannot read the transactions from the database ({error}).")
+        transactions = lire_transactions()
+    except pymysql.MySQLError as erreur:
+        sys.exit(f"Erreur : impossible de lire les transactions dans la base ({erreur}).")
     if not transactions:
-        sys.exit("Error: the transactions table is empty.")
+        sys.exit("Erreur : la table transactions est vide.")
 
-    # The model inputs (amount and hour) and the expected answer (fraud or not)
-    inputs = [[float(amount), hour] for amount, hour, _ in transactions]
-    frauds = [fraud for _, _, fraud in transactions]
+    # Les entrées du modèle (montant et heure) et la réponse attendue (fraude ou non)
+    entrees = [[float(montant), heure] for montant, heure, _ in transactions]
+    fraudes = [fraude for _, _, fraude in transactions]
 
-    # Input scaling, then KNN: without scaling, the amounts (up to 2,000 euros)
-    # would crush the hours (from 0 to 23) in the distance computation.
-    model = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=N_NEIGHBORS))
-    model.fit(inputs, frauds)
+    # Mise à l'échelle des entrées, puis KNN : sans mise à l'échelle, les montants
+    # (jusqu'à 2 000 euros) écraseraient les heures (de 0 à 23) dans le calcul des distances.
+    modele = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=NB_VOISINS))
+    modele.fit(entrees, fraudes)
 
-    Path(model_path).parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, model_path)
+    Path(chemin_modele).parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(modele, chemin_modele)
 
-    print(f"KNN model (k = {N_NEIGHBORS}) trained on {len(transactions)} transactions, "
-          f"including {sum(frauds)} frauds.")
-    print(f"Model saved to {model_path} (scikit-learn {sklearn.__version__}).")
+    print(f"Modèle KNN (k = {NB_VOISINS}) entraîné sur {len(transactions)} transactions, "
+          f"dont {sum(fraudes)} fraudes.")
+    print(f"Modèle enregistré dans {chemin_modele} (scikit-learn {sklearn.__version__}).")
 
 
 if __name__ == "__main__":

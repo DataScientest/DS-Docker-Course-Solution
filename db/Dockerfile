@@ -1,10 +1,10 @@
-# Base image: the official MariaDB image.
-# Our image inherits everything from it: the server, its startup command (no need for CMD),
-# its port 3306 and its /var/lib/mysql volume.
+# Image de base : l'image officielle de MariaDB.
+# Notre image en hérite tout : le serveur, sa commande de démarrage (pas besoin de CMD),
+# son port 3306 et son volume /var/lib/mysql.
 FROM mariadb:12.3
 
-# Scripts run automatically on first startup, when the database is empty
+# Scripts exécutés automatiquement au premier démarrage, quand la base est vide
 COPY init/ /docker-entrypoint-initdb.d/
 
-# Initial data, loaded by the initialization script
+# Données initiales, chargées par le script d'initialisation
 COPY data/ /data/

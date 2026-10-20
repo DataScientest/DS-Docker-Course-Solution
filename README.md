@@ -1,146 +1,146 @@
-# Docker running project: solution
+# Projet fil rouge Docker : solution
 
-🇫🇷 *Version française : branche [`fr`](https://github.com/DataScientest/DS-Docker-Course-Solution/tree/fr).*
+🇬🇧 *English version: branch [`main`](https://github.com/DataScientest/DS-Docker-Course-Solution/tree/main).*
 
-The final project of the Docker module: a customer transactions and fraud detection API, split into three containers connected by Docker Compose.
+Le projet final du module Docker : une API de transactions clients et de détection de fraude, découpée en trois conteneurs reliés par Docker Compose.
 
-The learners' starting point is in the [DS-Docker-Course-Architecture](https://github.com/DataScientest/DS-Docker-Course-Architecture) repository.
+Le point de départ des apprenants se trouve dans le dépôt [DS-Docker-Course-Architecture](https://github.com/DataScientest/DS-Docker-Course-Architecture/tree/fr) (branche `fr`).
 
-| Service | Role | Image |
+| Service | Rôle | Image |
 |---|---|---|
-| **`db`** | MariaDB database, initialized on first startup with 1,000 fictitious customer transactions | Built from the official `mariadb:12.3` image (`db/Dockerfile`) |
-| **`train`** | One-off job: reads the transactions, trains a KNN fraud detection model, saves it, then stops | Built from `python:3.13-slim` (`train/Dockerfile`) |
-| **`api`** | FastAPI API: transactions, statistics and model predictions | Built from `python:3.13-slim` (`api/Dockerfile`) |
+| **`db`** | Base MariaDB, initialisée au premier démarrage avec 1 000 transactions clients fictives | Construite à partir de l'image officielle `mariadb:12.3` (`db/Dockerfile`) |
+| **`train`** | Traitement ponctuel : lit les transactions, entraîne un modèle KNN de détection de fraude, l'enregistre, puis s'arrête | Construite à partir de `python:3.13-slim` (`train/Dockerfile`) |
+| **`api`** | API FastAPI : transactions, statistiques et prédictions du modèle | Construite à partir de `python:3.13-slim` (`api/Dockerfile`) |
 
 ```
-browser ──port 8000──▶ api ─────── SQL ───────▶ db ──▶ volume db_data
-                        ▲                       ▲
-                        │ reads the model       │ reads the transactions
-                        │                       │
-                  volume models ◀── writes ── train
+navigateur ──port 8000──▶ api ─────── SQL ───────▶ db ──▶ volume db_data
+                           ▲                       ▲
+                           │ lit le modèle         │ lit les transactions
+                           │                       │
+                     volume models ◀── écrit ─── train
 ```
 
-## Running the project
+## Lancer le projet
 
-All you need is Docker. From the root of the repository:
+Il suffit d'avoir Docker. Depuis la racine du dépôt :
 
-**1. Create the `.env` file**, which holds the passwords, from the provided template:
+**1. Créez le fichier `.env`**, qui contient les mots de passe, à partir du modèle fourni :
 
 ```bash
-cp .env.example .env              # PowerShell: Copy-Item .env.example .env
+cp .env.example .env              # PowerShell : Copy-Item .env.example .env
 ```
 
-The template's values are fine for a local test.
+Les valeurs du modèle conviennent pour un essai local.
 
-**2. Build the images and start the project**:
+**2. Construisez les images et démarrez le projet** :
 
 ```bash
 docker compose up -d --build
 ```
 
-On first start, Compose starts the database, which creates the table and loads the CSV into it. Once the database is ready (`healthy`), it runs the model training, then the API once the training has completed successfully. Allow a few dozen seconds. Then:
+Au premier lancement, Compose démarre la base, qui crée la table et y charge le CSV. Une fois la base prête (`healthy`), il lance l'entraînement du modèle, puis l'API une fois l'entraînement terminé avec succès. Comptez quelques dizaines de secondes. Ensuite :
 
-- http://localhost:8000/docs displays the interactive documentation of the API;
-- http://localhost:8000/stats shows `"nb_transactions": 1000`;
-- http://localhost:8000/predict?amount=450&hour=2 returns `{"is_fraud":true,"fraud_probability":1.0}`.
+- http://localhost:8000/docs affiche la documentation interactive de l'API ;
+- http://localhost:8000/stats indique `"nb_transactions": 1000` ;
+- http://localhost:8000/predict?amount=450&hour=2 renvoie `{"is_fraud":true,"fraud_probability":1.0}`.
 
-**3. To stop the project**: `docker compose down`. The data and the model are kept in their volumes. To delete everything, volumes included: `docker compose down -v`.
+**3. Pour arrêter le projet** : `docker compose down`. Les données et le modèle sont conservés dans leurs volumes. Pour tout supprimer, volumes compris : `docker compose down -v`.
 
 ## Architecture
 
 ```
 DS-Docker-Course-Solution/
-├── api/                          api service
-│   ├── main.py                   the FastAPI application
-│   ├── requirements.txt          its dependencies, including scikit-learn to read the model
+├── api/                          service api
+│   ├── main.py                   l'application FastAPI
+│   ├── requirements.txt          ses dépendances, dont scikit-learn pour lire le modèle
 │   ├── Dockerfile
 │   └── .dockerignore
-├── db/                           db service
-│   ├── Dockerfile                official MariaDB image + scripts + initial data
+├── db/                           service db
+│   ├── Dockerfile                image officielle de MariaDB + scripts + données initiales
 │   ├── init/
-│   │   └── 01_transactions.sql   run on first startup: creates the table, loads the CSV
+│   │   └── 01_transactions.sql   exécuté au premier démarrage : crée la table, charge le CSV
 │   └── data/
-│       └── transactions.csv      the initial data
-├── train/                        train service
-│   ├── train.py                  the KNN model training
-│   ├── requirements.txt          its dependencies, with the same scikit-learn version as the API
+│       └── transactions.csv      les données initiales
+├── train/                        service train
+│   ├── train.py                  l'entraînement du modèle KNN
+│   ├── requirements.txt          ses dépendances, avec la même version de scikit-learn que l'API
 │   ├── Dockerfile
 │   └── .dockerignore
-├── compose.yaml                  the three services, their volumes and their startup order
-├── .env.example                  template for the .env file (passwords)
+├── compose.yaml                  les trois services, leurs volumes et leur ordre de démarrage
+├── .env.example                  modèle du fichier .env (mots de passe)
 ├── .gitignore
 └── .gitattributes
 ```
 
-This structure follows six principles:
+Cette organisation suit six principes :
 
-1. **One folder per service**, named after the service, which groups its code, its dependencies and its Dockerfile. This folder is the image's build context: only its contents can be copied into the image.
-2. **Each service has its own image, even the database.** `db/Dockerfile` starts from the official MariaDB image and adds what is specific to the project: the initialization scripts (`init/`) and the initial data (`data/`). The image is self-contained: it works on any machine, without depending on external files.
-3. **Images hold the code, volumes hold the state.** The live database is in the `db_data` volume, the trained model in the `models` volume. Deleting or recreating a container loses nothing.
-4. **Configuration goes through environment variables**, defined in `compose.yaml`: the same image works with another database or another model location, without rebuilding.
-5. **Secrets go neither into images nor into Git.** The passwords are in `.env`, excluded from Git by `.gitignore`, and each build context has its `.dockerignore`.
-6. **Versions are pinned everywhere**: base images (`python:3.13-slim`, `mariadb:12.3`) and libraries (`requirements.txt`). In particular, `train` and `api` use exactly the same scikit-learn version: a model saved with one version and loaded with another can give wrong results.
+1. **Un dossier par service**, qui porte le nom du service et regroupe son code, ses dépendances et son Dockerfile. Ce dossier est le contexte de construction de l'image : seul son contenu peut y être copié.
+2. **Chaque service a son image, même la base.** `db/Dockerfile` part de l'image officielle de MariaDB et y ajoute ce qui est propre au projet : les scripts d'initialisation (`init/`) et les données initiales (`data/`). L'image se suffit à elle-même : elle fonctionne sur n'importe quelle machine, sans dépendre de fichiers extérieurs.
+3. **Les images contiennent le code, les volumes contiennent l'état.** La base vivante est dans le volume `db_data`, le modèle entraîné dans le volume `models`. Supprimer ou recréer un conteneur ne fait rien perdre.
+4. **La configuration passe par des variables d'environnement**, définies dans `compose.yaml` : la même image fonctionne avec une autre base ou un autre emplacement de modèle, sans reconstruction.
+5. **Les secrets ne vont ni dans les images, ni dans Git.** Les mots de passe sont dans `.env`, exclu de Git par `.gitignore`, et chaque contexte de construction a son `.dockerignore`.
+6. **Les versions sont figées partout** : images de base (`python:3.13-slim`, `mariadb:12.3`) et librairies (`requirements.txt`). En particulier, `train` et `api` utilisent exactement la même version de scikit-learn : un modèle enregistré avec une version et relu avec une autre peut donner des résultats faux.
 
-## The Docker files in detail
+## Les fichiers Docker en détail
 
 ### `db/Dockerfile`
 
-- `FROM mariadb:12.3`: the image inherits everything the official image defines, including its startup command (hence no `CMD`), its port 3306 and its `/var/lib/mysql` volume.
-- `COPY init/ /docker-entrypoint-initdb.d/`: the official image runs the scripts in this folder on first startup, only if the database does not exist yet (empty volume), in alphabetical order.
-- `COPY data/ /data/`: the CSV, read by `01_transactions.sql` with `LOAD DATA INFILE '/data/transactions.csv'`.
+- `FROM mariadb:12.3` : l'image hérite de tout ce que définit l'image officielle, dont sa commande de démarrage (d'où l'absence de `CMD`), son port 3306 et son volume `/var/lib/mysql`.
+- `COPY init/ /docker-entrypoint-initdb.d/` : l'image officielle exécute les scripts de ce dossier au premier démarrage, uniquement si la base n'existe pas encore (volume vide), par ordre alphabétique.
+- `COPY data/ /data/` : le CSV, lu par `01_transactions.sql` avec `LOAD DATA INFILE '/data/transactions.csv'`.
 
-### `api/Dockerfile` and `train/Dockerfile`
+### `api/Dockerfile` et `train/Dockerfile`
 
-- The dependencies are copied and installed **before** the code: as long as `requirements.txt` does not change, this layer stays cached, and a code change does not reinstall the libraries.
-- `COPY . .` copies the whole service folder, except what its `.dockerignore` excludes (secrets, virtual environments, files generated by Python).
-- API: `EXPOSE 8000` documents the port, which `ports:` actually publishes. `--host 0.0.0.0` is essential: on `127.0.0.1`, uvicorn would only accept connections coming from inside the container.
-- Training: no port. The container runs `python train.py`, then stops with code 0: this is the expected behavior of a one-off job.
+- Les dépendances sont copiées et installées **avant** le code : tant que `requirements.txt` ne change pas, cette couche reste en cache, et une modification du code ne réinstalle pas les librairies.
+- `COPY . .` copie tout le dossier du service, sauf ce qu'exclut son `.dockerignore` (secrets, environnements virtuels, fichiers générés par Python).
+- API : `EXPOSE 8000` documente le port, que `ports:` publie réellement. `--host 0.0.0.0` est indispensable : sur `127.0.0.1`, uvicorn n'accepterait que les connexions venues de l'intérieur du conteneur.
+- Entraînement : pas de port. Le conteneur exécute `python train.py`, puis s'arrête avec le code 0 : c'est le comportement attendu d'un traitement ponctuel.
 
 ### `compose.yaml`
 
-- **`name: ds-project`** sets the project name: the containers are called `ds-project-db-1`, `ds-project-train-1` and `ds-project-api-1`, the volumes `ds-project_db_data` and `ds-project_models`, the network `ds-project_default`.
-- **`build`**: each service is built from its folder; Compose names the images after the project and the service (`ds-project-db`, `ds-project-train`, `ds-project-api`).
-- **Network**: each service can be reached by its name. `DB_HOST` is therefore `db` (inside a container, `localhost` would mean the container itself). The database's port 3306 is not published: only the project's containers access it.
-- **Volumes**: `db_data` keeps the database; `models` is shared between `train`, which writes the model to it, and `api`, which reads it in read-only mode (`:ro`). `MODEL_PATH` tells both programs the path of the file in this volume.
-- **Startup order**: the database `healthcheck` uses the `healthcheck.sh` script, provided by the MariaDB image, which only reports it healthy once it accepts connections. `train` waits for this condition (`service_healthy`), and `api` additionally waits for `train` to complete successfully (`service_completed_successfully`).
-- **`${…}` variables**: Compose replaces them with the values from the `.env` file. A single variable, `DB_PASSWORD`, feeds the database and both programs: the passwords cannot diverge. `docker compose config` displays the result.
+- **`name: fil-rouge`** fixe le nom du projet : les conteneurs s'appellent `fil-rouge-db-1`, `fil-rouge-train-1` et `fil-rouge-api-1`, les volumes `fil-rouge_db_data` et `fil-rouge_models`, le réseau `fil-rouge_default`.
+- **`build`** : chaque service est construit à partir de son dossier ; Compose nomme les images d'après le projet et le service (`fil-rouge-db`, `fil-rouge-train`, `fil-rouge-api`).
+- **Réseau** : chaque service est joignable par son nom. `DB_HOST` vaut donc `db` (dans un conteneur, `localhost` désignerait le conteneur lui-même). Le port 3306 de la base n'est pas publié : seuls les conteneurs du projet y accèdent.
+- **Volumes** : `db_data` conserve la base ; `models` est partagé entre `train`, qui y écrit le modèle, et `api`, qui le lit en lecture seule (`:ro`). `MODEL_PATH` indique aux deux programmes le chemin du fichier dans ce volume.
+- **Ordre de démarrage** : le `healthcheck` de la base utilise le script `healthcheck.sh`, fourni par l'image MariaDB, qui ne la déclare en bonne santé que lorsqu'elle accepte les connexions. `train` attend cette condition (`service_healthy`), et `api` attend en plus que `train` se soit terminé avec succès (`service_completed_successfully`).
+- **Variables `${…}`** : Compose les remplace par les valeurs du fichier `.env`. Une seule variable, `DB_PASSWORD`, alimente la base et les deux programmes : les mots de passe ne peuvent pas diverger. `docker compose config` affiche le résultat.
 
-## Checking that everything works
+## Vérifier que tout fonctionne
 
 ```bash
-docker compose ps -a                 # db "(healthy)", api "Up", train "Exited (0)"
-docker compose logs train            # "KNN model (k = 5) trained on 1000 transactions, including 77 frauds."
-curl http://localhost:8000/health/db # {"status":"ok","database":"ds_project","nb_transactions":1000}
+docker compose ps -a                 # db « (healthy) », api « Up », train « Exited (0) »
+docker compose logs train            # « Modèle KNN (k = 5) entraîné sur 1000 transactions, dont 77 fraudes. »
+curl http://localhost:8000/health/db # {"status":"ok","database":"fil_rouge","nb_transactions":1000}
 curl "http://localhost:8000/predict?amount=42.5&hour=14"   # {"is_fraud":false,"fraud_probability":0.0}
-docker compose exec db mariadb -u api -papipass ds_project -e "SELECT COUNT(*) FROM transactions;"
+docker compose exec db mariadb -u api -papipass fil_rouge -e "SELECT COUNT(*) FROM transactions;"
 ```
 
-On Windows PowerShell, replace `curl` with `curl.exe`.
+Sous Windows PowerShell, remplacez `curl` par `curl.exe`.
 
-## The API routes
+## Les routes de l'API
 
-| Route | Role |
+| Route | Rôle |
 |---|---|
-| `GET /` | Welcome message |
-| `GET /info` | Runtime environment: container name, Python version, database configured or not |
-| `GET /health` | Does the API respond? (without querying the database) |
-| `GET /health/db` | Is the database reachable? Number of transactions |
-| `GET /transactions` | List of transactions, paginated (`limit`, `offset`) and filterable (`customer_id`, `category`) |
-| `GET /transactions/{transaction_id}` | One transaction |
-| `GET /customers/{customer_id}/summary` | Summary of a customer's activity |
-| `GET /stats` | Overall statistics |
-| `GET /predict?amount=…&hour=…` | Model prediction: is the transaction fraudulent? |
+| `GET /` | Message d'accueil |
+| `GET /info` | Environnement d'exécution : nom du conteneur, version de Python, base configurée ou non |
+| `GET /health` | L'API répond-elle ? (sans interroger la base) |
+| `GET /health/db` | La base est-elle joignable ? Nombre de transactions |
+| `GET /transactions` | Liste des transactions, paginée (`limit`, `offset`) et filtrable (`customer_id`, `category`) |
+| `GET /transactions/{transaction_id}` | Une transaction |
+| `GET /customers/{customer_id}/summary` | Résumé de l'activité d'un client |
+| `GET /stats` | Statistiques globales |
+| `GET /predict?amount=…&hour=…` | Prédiction du modèle : la transaction est-elle frauduleuse ? |
 
-The model is a KNN (k = 5) trained on the amount and hour of the transactions: `fraud_probability` is the share of frauds among the 5 closest known transactions. In this fictitious data, fraud is concentrated at night and on large amounts.
+Le modèle est un KNN (k = 5) entraîné sur le montant et l'heure des transactions : `fraud_probability` est la part de fraudes parmi les 5 transactions connues les plus proches. Dans ces données fictives, la fraude se concentre la nuit et sur les gros montants.
 
-## Mapping to the course
+## Correspondance avec le cours
 
-| File | Course step |
+| Fichier | Étape du cours |
 |---|---|
-| `api/Dockerfile`, `api/.dockerignore` | 4: containerize the API |
-| `db/Dockerfile` | 5: add a MariaDB database and a volume |
-| `compose.yaml` (`db` and `api` services) | 6: connect everything with Docker Compose |
-| `.env.example` and `${…}` variables | 6: bonus, move the passwords out of the Compose file |
-| `train/Dockerfile`, `train/.dockerignore`, `train` service, `models` volume, `api/requirements.txt` | 8: serve a model |
+| `api/Dockerfile`, `api/.dockerignore` | 4 : conteneuriser l'API |
+| `db/Dockerfile` | 5 : ajouter une base MariaDB et un volume |
+| `compose.yaml` (services `db` et `api`) | 6 : tout relier avec Docker Compose |
+| `.env.example` et variables `${…}` | 6 : bonus, sortir les mots de passe du fichier Compose |
+| `train/Dockerfile`, `train/.dockerignore`, service `train`, volume `models`, `api/requirements.txt` | 8 : servir un modèle |
 
-The solution to the step 2 exercise (the first Dockerfile) is in the course.
+La solution de l'exercice de l'étape 2 (le premier Dockerfile) se trouve dans le cours.

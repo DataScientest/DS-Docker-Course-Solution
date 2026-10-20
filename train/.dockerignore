@@ -1,12 +1,12 @@
-# Files not to send to the build (and therefore not to copy into the image)
+# Fichiers à ne pas envoyer au build (et donc à ne pas copier dans l'image)
 
-# Secrets: must never end up in an image
+# Secrets : ne doivent jamais se retrouver dans une image
 .env
 
-# Python virtual environments: heavy, and the image already installs its libraries
+# Environnements virtuels Python : lourds, et l'image installe déjà ses librairies
 .venv/
 venv/
 
-# Files compiled by Python, recreated automatically
+# Fichiers compilés par Python, recréés automatiquement
 __pycache__/
 *.pyc

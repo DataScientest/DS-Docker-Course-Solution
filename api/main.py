@@ -1,41 +1,41 @@
 """
-"Customer Transactions" API: the application of the Docker module's running project.
+API « Transactions clients » : l'application du projet fil rouge du module Docker.
 
-You do not need to modify this file: your job is to run this application
-in Docker.
+Vous n'avez pas besoin de modifier ce fichier : votre travail consiste à faire
+tourner cette application dans Docker.
 
-What the application does
+Ce que fait l'application
 -------------------------
-It exposes, as a web API, customer transactions stored in a MariaDB
-database, as well as a fraud detection model (the /predict route). FastAPI
-automatically generates interactive documentation of the routes, available
-at /docs.
+Elle expose, sous forme d'API web, des transactions clients stockées dans une
+base de données MariaDB, ainsi qu'un modèle de détection de fraude (route
+/predict). FastAPI génère automatiquement une documentation interactive des
+routes, accessible à l'adresse /docs.
 
-Starting the application
-------------------------
+Lancer l'application
+--------------------
     uvicorn main:app --host 0.0.0.0 --port 8000
 
-Configuration (environment variables)
--------------------------------------
-    DB_HOST      host name of the MariaDB server
-    DB_PORT      port of the MariaDB server (3306 by default)
-    DB_USER      database user
-    DB_PASSWORD  password of this user
-    DB_NAME      name of the database
-    MODEL_PATH   path of the trained model file, for example
-                 /models/knn.joblib (see the train.py script of the train service)
+Configuration (variables d'environnement)
+-----------------------------------------
+    DB_HOST      nom d'hôte du serveur MariaDB
+    DB_PORT      port du serveur MariaDB (3306 par défaut)
+    DB_USER      utilisateur de la base de données
+    DB_PASSWORD  mot de passe de cet utilisateur
+    DB_NAME      nom de la base de données
+    MODEL_PATH   chemin du fichier du modèle entraîné, par exemple
+                 /models/knn.joblib (voir le script train.py du service train)
 
-If DB_HOST is not set, the API starts anyway, but without a database: the
-routes that need the data respond with a 503 error.
+Si DB_HOST n'est pas définie, l'API démarre quand même, mais sans base de
+données : les routes qui ont besoin des données répondent par une erreur 503.
 
-If DB_HOST is set but the database cannot be reached at startup, the API
-stops immediately with an error message ("fail fast" principle: better to
-stop right away than to keep running in a broken state).
+Si DB_HOST est définie mais que la base est injoignable au démarrage, l'API
+s'arrête immédiatement avec un message d'erreur (principe du « fail fast » :
+mieux vaut s'arrêter tout de suite que tourner dans un état bancal).
 
-The /predict route needs a model: as long as MODEL_PATH is not set, the model
-file does not exist or scikit-learn is not installed in the image, it
-responds with a 503 error that explains what is missing. The model is loaded
-at the first prediction, then reloaded if it has been retrained.
+La route /predict a besoin d'un modèle : tant que MODEL_PATH n'est pas définie,
+que le fichier du modèle n'existe pas ou que scikit-learn n'est pas installé
+dans l'image, elle répond par une erreur 503 qui explique ce qui manque. Le
+modèle est lu à la première prédiction, puis relu s'il a été réentraîné.
 """
 
 import logging
@@ -49,7 +49,7 @@ import pymysql
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-# --- Configuration, read from environment variables ---------------------------
+# --- Configuration, lue dans les variables d'environnement --------------------
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER", "")
@@ -57,13 +57,13 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "")
 MODEL_PATH = os.getenv("MODEL_PATH")
 
-# We write to uvicorn's logs: they are displayed by `docker logs`
+# On écrit dans les logs d'uvicorn : ils s'affichent avec `docker logs`
 logger = logging.getLogger("uvicorn.error")
 
 
-# --- Database access ----------------------------------------------------------
-def connect():
-    """Opens a connection to MariaDB (raises pymysql.MySQLError on failure)."""
+# --- Accès à la base de données -----------------------------------------------
+def connecter():
+    """Ouvre une connexion à MariaDB (lève pymysql.MySQLError en cas d'échec)."""
     return pymysql.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -75,97 +75,97 @@ def connect():
     )
 
 
-def run_query(query, parameters=()):
-    """Runs a read-only SQL query and returns the resulting rows."""
+def executer(requete, parametres=()):
+    """Exécute une requête SQL de lecture et renvoie les lignes obtenues."""
     if not DB_HOST:
         raise HTTPException(
             status_code=503,
-            detail="No database configured: the DB_HOST environment variable "
-                   "is not set.",
+            detail="Aucune base de données configurée : la variable d'environnement "
+                   "DB_HOST n'est pas définie.",
         )
     try:
-        connection = connect()
-    except pymysql.MySQLError as error:
+        connexion = connecter()
+    except pymysql.MySQLError as erreur:
         raise HTTPException(
             status_code=503,
-            detail=f"Database unreachable ({DB_HOST}:{DB_PORT}): {error}",
-        ) from error
+            detail=f"Base de données injoignable ({DB_HOST}:{DB_PORT}) : {erreur}",
+        ) from erreur
     try:
-        with connection.cursor() as cursor:
-            cursor.execute(query, parameters)
-            return cursor.fetchall()
-    except pymysql.MySQLError as error:
-        raise HTTPException(status_code=500, detail=f"SQL error: {error}") from error
+        with connexion.cursor() as curseur:
+            curseur.execute(requete, parametres)
+            return curseur.fetchall()
+    except pymysql.MySQLError as erreur:
+        raise HTTPException(status_code=500, detail=f"Erreur SQL : {erreur}") from erreur
     finally:
-        connection.close()
+        connexion.close()
 
 
-# --- Model access -------------------------------------------------------------
-_model_in_memory = {"file_date": None, "model": None}
+# --- Accès au modèle ----------------------------------------------------------
+_modele_en_memoire = {"date_du_fichier": None, "modele": None}
 
 
-def load_model():
-    """Returns the model saved in MODEL_PATH, reloaded if it has been retrained."""
+def charger_modele():
+    """Renvoie le modèle enregistré dans MODEL_PATH, relu s'il a été réentraîné."""
     if not MODEL_PATH:
         raise HTTPException(
             status_code=503,
-            detail="No model configured: the MODEL_PATH environment variable "
-                   "is not set.",
+            detail="Aucun modèle configuré : la variable d'environnement "
+                   "MODEL_PATH n'est pas définie.",
         )
     if not os.path.isfile(MODEL_PATH):
         raise HTTPException(
             status_code=503,
-            detail=f"No model found at {MODEL_PATH}: "
-                   "the model has not been trained yet, or this file "
-                   "is not accessible from the API container.",
+            detail=f"Aucun modèle trouvé à l'emplacement {MODEL_PATH} : "
+                   "le modèle n'a pas encore été entraîné, ou ce fichier "
+                   "n'est pas accessible depuis le conteneur de l'API.",
         )
     try:
-        import joblib  # installed with scikit-learn
-    except ImportError as error:
+        import joblib  # installé avec scikit-learn
+    except ImportError as erreur:
         raise HTTPException(
             status_code=503,
-            detail="scikit-learn is not installed in the API image: "
-                   "cannot load the model.",
-        ) from error
-    file_date = os.path.getmtime(MODEL_PATH)
-    if file_date != _model_in_memory["file_date"]:
-        _model_in_memory["model"] = joblib.load(MODEL_PATH)
-        _model_in_memory["file_date"] = file_date
-        logger.info("Model loaded from %s.", MODEL_PATH)
-    return _model_in_memory["model"]
+            detail="scikit-learn n'est pas installé dans l'image de l'API : "
+                   "impossible de charger le modèle.",
+        ) from erreur
+    date_du_fichier = os.path.getmtime(MODEL_PATH)
+    if date_du_fichier != _modele_en_memoire["date_du_fichier"]:
+        _modele_en_memoire["modele"] = joblib.load(MODEL_PATH)
+        _modele_en_memoire["date_du_fichier"] = date_du_fichier
+        logger.info("Modèle chargé depuis %s.", MODEL_PATH)
+    return _modele_en_memoire["modele"]
 
 
-# --- Application startup ------------------------------------------------------
+# --- Démarrage de l'application -----------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Code run once, when the API starts."""
+    """Code exécuté une fois, au démarrage de l'API."""
     if not DB_HOST:
         logger.warning(
-            "DB_HOST is not set: the API is starting WITHOUT a database. "
-            "Routes that read transactions will return a 503 error."
+            "DB_HOST n'est pas définie : l'API démarre SANS base de données. "
+            "Les routes qui lisent les transactions renverront une erreur 503."
         )
     else:
         try:
-            connect().close()
-        except pymysql.MySQLError as error:
+            connecter().close()
+        except pymysql.MySQLError as erreur:
             logger.error(
-                "Cannot connect to database '%s' on %s:%s: %s",
-                DB_NAME, DB_HOST, DB_PORT, error,
+                "Impossible de se connecter à la base '%s' sur %s:%s : %s",
+                DB_NAME, DB_HOST, DB_PORT, erreur,
             )
-            raise RuntimeError("Database unreachable at startup: stopping the API.") from error
-        logger.info("Connected to database '%s' on %s:%s.", DB_NAME, DB_HOST, DB_PORT)
+            raise RuntimeError("Base de données injoignable au démarrage : arrêt de l'API.") from erreur
+        logger.info("Connexion à la base '%s' sur %s:%s réussie.", DB_NAME, DB_HOST, DB_PORT)
     yield
 
 
 app = FastAPI(
-    title="Customer Transactions API",
-    description="Running project of the Docker module: customer transactions stored in MariaDB.",
+    title="API Transactions clients",
+    description="Projet fil rouge du module Docker : des transactions clients stockées dans MariaDB.",
     version="1.0.0",
     lifespan=lifespan,
 )
 
 
-# --- Response formats (displayed in /docs) ------------------------------------
+# --- Format des réponses (affiché dans /docs) ---------------------------------
 class Transaction(BaseModel):
     transaction_id: int
     transaction_date: datetime
@@ -200,15 +200,15 @@ class Prediction(BaseModel):
 
 
 # --- Routes -------------------------------------------------------------------
-@app.get("/", tags=["Home"])
-def home():
-    """Welcome message."""
-    return {"message": "Welcome to the Customer Transactions API!", "documentation": "/docs"}
+@app.get("/", tags=["Accueil"])
+def accueil():
+    """Message d'accueil."""
+    return {"message": "Bienvenue sur l'API Transactions clients !", "documentation": "/docs"}
 
 
-@app.get("/info", tags=["Home"])
-def info():
-    """Information about the environment the API runs in."""
+@app.get("/info", tags=["Accueil"])
+def informations():
+    """Informations sur l'environnement dans lequel tourne l'API."""
     return {
         "hostname": socket.gethostname(),
         "python_version": platform.python_version(),
@@ -217,54 +217,54 @@ def info():
     }
 
 
-@app.get("/health", tags=["Health"])
-def health():
-    """Checks that the API responds, without querying the database."""
+@app.get("/health", tags=["Santé"])
+def sante():
+    """Vérifie que l'API répond, sans interroger la base."""
     return {"status": "ok"}
 
 
-@app.get("/health/db", tags=["Health"])
-def health_db():
-    """Checks that the database is reachable and counts the transactions."""
-    row = run_query("SELECT COUNT(*) AS nb FROM transactions")[0]
-    return {"status": "ok", "database": DB_NAME, "nb_transactions": row["nb"]}
+@app.get("/health/db", tags=["Santé"])
+def sante_base():
+    """Vérifie que la base est joignable et compte les transactions."""
+    ligne = executer("SELECT COUNT(*) AS nb FROM transactions")[0]
+    return {"status": "ok", "database": DB_NAME, "nb_transactions": ligne["nb"]}
 
 
 @app.get("/transactions", response_model=list[Transaction], tags=["Transactions"])
-def list_transactions(
-    limit: int = Query(10, ge=1, le=100, description="Maximum number of transactions returned"),
-    offset: int = Query(0, ge=0, description="Number of transactions to skip (pagination)"),
-    customer_id: str | None = Query(None, description="Filter on a customer, for example C042"),
-    category: str | None = Query(None, description="Filter on a category, for example health"),
+def lister_transactions(
+    limit: int = Query(10, ge=1, le=100, description="Nombre maximum de transactions renvoyées"),
+    offset: int = Query(0, ge=0, description="Nombre de transactions à sauter (pagination)"),
+    customer_id: str | None = Query(None, description="Filtrer sur un client, par exemple C042"),
+    category: str | None = Query(None, description="Filtrer sur une catégorie, par exemple sante"),
 ):
-    """Lists the transactions, from the oldest to the most recent."""
-    conditions, parameters = [], []
+    """Liste les transactions, de la plus ancienne à la plus récente."""
+    conditions, parametres = [], []
     if customer_id:
         conditions.append("customer_id = %s")
-        parameters.append(customer_id)
+        parametres.append(customer_id)
     if category:
         conditions.append("category = %s")
-        parameters.append(category)
-    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    return run_query(
-        f"SELECT * FROM transactions {where} ORDER BY transaction_id LIMIT %s OFFSET %s",
-        (*parameters, limit, offset),
+        parametres.append(category)
+    filtre = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    return executer(
+        f"SELECT * FROM transactions {filtre} ORDER BY transaction_id LIMIT %s OFFSET %s",
+        (*parametres, limit, offset),
     )
 
 
 @app.get("/transactions/{transaction_id}", response_model=Transaction, tags=["Transactions"])
-def read_transaction(transaction_id: int):
-    """Returns a transaction from its identifier."""
-    rows = run_query("SELECT * FROM transactions WHERE transaction_id = %s", (transaction_id,))
-    if not rows:
-        raise HTTPException(status_code=404, detail=f"Transaction {transaction_id} not found.")
-    return rows[0]
+def lire_transaction(transaction_id: int):
+    """Renvoie une transaction à partir de son identifiant."""
+    lignes = executer("SELECT * FROM transactions WHERE transaction_id = %s", (transaction_id,))
+    if not lignes:
+        raise HTTPException(status_code=404, detail=f"Transaction {transaction_id} introuvable.")
+    return lignes[0]
 
 
-@app.get("/customers/{customer_id}/summary", response_model=CustomerSummary, tags=["Customers"])
-def customer_summary(customer_id: str):
-    """Summary of a customer's activity: number of transactions, amounts and dates."""
-    rows = run_query(
+@app.get("/customers/{customer_id}/summary", response_model=CustomerSummary, tags=["Clients"])
+def resume_client(customer_id: str):
+    """Résumé de l'activité d'un client : nombre de transactions, montants et dates."""
+    lignes = executer(
         """
         SELECT customer_id,
                COUNT(*)              AS nb_transactions,
@@ -278,15 +278,15 @@ def customer_summary(customer_id: str):
         """,
         (customer_id,),
     )
-    if not rows:
-        raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found.")
-    return rows[0]
+    if not lignes:
+        raise HTTPException(status_code=404, detail=f"Client {customer_id} introuvable.")
+    return lignes[0]
 
 
-@app.get("/stats", response_model=Stats, tags=["Statistics"])
-def statistics():
-    """Overall statistics on all transactions."""
-    stats = run_query(
+@app.get("/stats", response_model=Stats, tags=["Statistiques"])
+def statistiques():
+    """Statistiques globales sur l'ensemble des transactions."""
+    stats = executer(
         """
         SELECT COUNT(*)                           AS nb_transactions,
                COUNT(DISTINCT customer_id)        AS nb_customers,
@@ -296,20 +296,20 @@ def statistics():
         FROM transactions
         """
     )[0]
-    categories = run_query(
+    categories = executer(
         "SELECT category, COUNT(*) AS nb FROM transactions GROUP BY category ORDER BY nb DESC"
     )
-    stats["transactions_by_category"] = {row["category"]: row["nb"] for row in categories}
+    stats["transactions_by_category"] = {ligne["category"]: ligne["nb"] for ligne in categories}
     return stats
 
 
-@app.get("/predict", response_model=Prediction, tags=["Model"])
-def predict(
-    amount: float = Query(..., gt=0, description="Transaction amount, in euros", examples=[450.0]),
-    hour: int = Query(..., ge=0, le=23, description="Transaction hour, from 0 to 23", examples=[2]),
+@app.get("/predict", response_model=Prediction, tags=["Modèle"])
+def predire(
+    amount: float = Query(..., gt=0, description="Montant de la transaction, en euros", examples=[450.0]),
+    hour: int = Query(..., ge=0, le=23, description="Heure de la transaction, de 0 à 23", examples=[2]),
 ):
-    """Predicts whether a transaction is fraudulent, from its amount and hour."""
-    model = load_model()
-    # Column 1: probability of class 1, i.e. "fraud"
-    probability = float(model.predict_proba([[amount, hour]])[0][1])
-    return {"is_fraud": probability >= 0.5, "fraud_probability": round(probability, 2)}
+    """Prédit si une transaction est frauduleuse, à partir de son montant et de son heure."""
+    modele = charger_modele()
+    # Colonne 1 : probabilité de la classe 1, c'est-à-dire « fraude »
+    probabilite = float(modele.predict_proba([[amount, hour]])[0][1])
+    return {"is_fraud": probabilite >= 0.5, "fraud_probability": round(probabilite, 2)}

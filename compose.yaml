@@ -1,42 +1,42 @@
-# The complete project: the database (db), model training (train) and the API (api).
-# The ${…} passwords are read from the .env file (a copy of .env.example).
-name: ds-project
+# Le projet complet : la base (db), l'entraînement du modèle (train) et l'API (api).
+# Les mots de passe ${…} sont lus dans le fichier .env (copie de .env.example).
+name: fil-rouge
 
 services:
-  # MariaDB database: image built from db/Dockerfile (official image + scripts + data)
+  # Base MariaDB : image construite à partir de db/Dockerfile (image officielle + scripts + données)
   db:
     build: ./db
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
-      MARIADB_DATABASE: ds_project
+      MARIADB_DATABASE: fil_rouge
       MARIADB_USER: api
       MARIADB_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - db_data:/var/lib/mysql            # the data outlives the containers
-    healthcheck:                          # "ready" = accepts connections
+      - db_data:/var/lib/mysql            # les données survivent aux conteneurs
+    healthcheck:                          # « prête » = accepte les connexions
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 30s
 
-  # Model training: a one-off job, which stops (code 0) once the model is saved
+  # Entraînement du modèle : un traitement ponctuel, qui s'arrête (code 0) une fois le modèle enregistré
   train:
     build: ./train
     environment:
-      DB_HOST: db                         # the name of the database service
+      DB_HOST: db                         # le nom du service de la base
       DB_PORT: 3306
       DB_USER: api
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ds_project
+      DB_NAME: fil_rouge
       MODEL_PATH: /models/knn.joblib
     volumes:
-      - models:/models                    # the model is written to the shared volume
+      - models:/models                    # le modèle est écrit dans le volume partagé
     depends_on:
       db:
-        condition: service_healthy        # wait until the database is ready
+        condition: service_healthy        # attendre que la base soit prête
 
-  # FastAPI API: transactions and predictions
+  # API FastAPI : transactions et prédictions
   api:
     build: ./api
     ports:
@@ -46,15 +46,15 @@ services:
       DB_PORT: 3306
       DB_USER: api
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ds_project
+      DB_NAME: fil_rouge
       MODEL_PATH: /models/knn.joblib
     volumes:
-      - models:/models:ro                 # same volume, read-only: the API only reads the model
+      - models:/models:ro                 # même volume, en lecture seule : l'API ne fait que lire le modèle
     depends_on:
       db:
         condition: service_healthy
       train:
-        condition: service_completed_successfully   # wait until the model is trained
+        condition: service_completed_successfully   # attendre que le modèle soit entraîné
 
 volumes:
   db_data:
