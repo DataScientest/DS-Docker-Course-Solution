@@ -1,0 +1,12 @@
+# Files not to send to the build (and therefore not to copy into the image)
+
+# Secrets: must never end up in an image
+.env
+
+# Python virtual environments: heavy, and the image already installs its libraries
+.venv/
+venv/
+
+# Files compiled by Python, recreated automatically
+__pycache__/
+*.pyc
